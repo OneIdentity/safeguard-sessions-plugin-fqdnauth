@@ -1,4 +1,3 @@
-#
 #!/usr/bin/env pluginwrapper3
 #
 #   Copyright (c) 2019 One Identity
@@ -21,4 +20,4 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-from lib.plugin import Plugin
+from lib.plugin import Plugin  # noqa: F401

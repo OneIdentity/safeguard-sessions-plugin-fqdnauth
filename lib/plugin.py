@@ -19,19 +19,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-from safeguard.sessions.plugin import AAPlugin, AAResponse
-from safeguard.sessions.plugin import HostResolver
+from safeguard.sessions.plugin import AAPlugin, AAResponse, HostResolver
 import re
 from fnmatch import fnmatch
 
 
 class Plugin(AAPlugin):
-    def __init__(self, configuration):
-        super().__init__(configuration)
-
-    def do_authenticate(self):
-        return None
-
     def do_authorize(self):
         target_hosts = self._resolve_ip(self.connection.target_server)
 
@@ -40,6 +33,9 @@ class Plugin(AAPlugin):
             return AAResponse.accept()
         else:
             return AAResponse.deny()
+
+    def _extract_mfa_password(self):
+        return ''
 
     @staticmethod
     def _resolve_ip(ip):
@@ -79,8 +75,8 @@ class Plugin(AAPlugin):
 
     def _groups_for_hosts_match(self, hosts, groups):
         host_entries = self.plugin_configuration.get_options('groups_for_hosts')
-        
-        if len(host_entries) == 0 or groups is None :
+
+        if len(host_entries) == 0 or groups is None:
             return False
 
         for host in hosts:
@@ -100,4 +96,3 @@ class Plugin(AAPlugin):
     def _lists_intersect(a, b):
         # see https://stackoverflow.com/questions/3170055/test-if-lists-share-any-items-in-python
         return not set(a).isdisjoint(b)
-
