@@ -1,0 +1,6 @@
+[packages]
+
+[dev-packages]
+
+[requires]
+python-version = "3.6"
