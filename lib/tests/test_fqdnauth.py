@@ -19,13 +19,17 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #
-from ..plugin import Plugin
 from mock import patch
 from textwrap import dedent
+from copy import deepcopy
+import pytest
+
+from ..plugin import Plugin
 
 
 def test_authentication_is_not_performed():
-    assert Plugin(configuration="").do_authenticate()['verdict'] == 'ACCEPT'
+    result = Plugin(configuration="").do_authenticate()
+    assert result['verdict'] == 'ACCEPT'
 
 
 def test_target_ip_is_resolved():
@@ -39,176 +43,240 @@ def test_target_ip_is_resolved():
         mock_resolver.assert_called_once_with(target_server)
 
 
-def test_target_ip_resolved_to_one_host_in_whitelist_is_accepted():
-    _assert_for_verdict(
-        target_ip='DONTCARE',
-        target_ip_resolved=['host1234'],
-        whitelist_in_config=['host1234'],
-        expected_verdict='ACCEPT'
+def provide_authorization_test_cases():
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234'],
+            'config': dedent("""
+                [hosts_for_groups]
+                __all__ = host1234
+                """),
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': []
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Target IP resolved to one host in whitelist is accepted'
     )
 
-
-def test_target_ip_resolved_to_one_host_not_in_whitelist_is_denied():
-    _assert_for_verdict(
-        target_ip='DONTCARE',
-        target_ip_resolved=['different_host'],
-        whitelist_in_config=['host1234'],
-        expected_verdict='DENY'
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['different_host'],
+            'config': dedent("""
+                [hosts_for_groups]
+                __all__ = host1234
+                """),
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': []
+            },
+            'expected_verdict': 'DENY'
+        },
+        id='Target IP resolved to one host not in whitelist is denied',
     )
 
-
-def test_target_ip_resolved_to_multiple_hosts_in_whitelist_is_accepted():
-    _assert_for_verdict(
-        target_ip='DONTCARE',
-        target_ip_resolved=['host1234', 'different_host'],
-        whitelist_in_config=['host1234'],
-        expected_verdict='ACCEPT'
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234', 'different_host'],
+            'config': dedent("""
+                [hosts_for_groups]
+                __all__ = host1234
+                """),
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': []
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Target IP resolved to multiple hosts in whitelist is accepted',
     )
 
-
-def test_target_ip_resolved_to_one_hosts_in_multiline_whitelist_is_accepted():
-    _assert_for_verdict(
-        target_ip='DONTCARE',
-        target_ip_resolved=['host1234'],
-        whitelist_in_config=['host4567', 'foo', 'host1234', 'bar'],
-        expected_verdict='ACCEPT'
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234'],
+            'config': dedent("""[hosts_for_groups]\n__all__ = {whitelist}\n
+                """.format(whitelist="\n         ".join(['host4567', 'foo', 'host1234', 'bar']))),
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': []
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Target IP resolved to one host in multiline whitelist is accepted',
     )
 
-
-def test_target_ip_resolved_to_multiple_hosts_in_multiline_whitelist_is_accepted():
-    _assert_for_verdict(
-        target_ip='DONTCARE',
-        target_ip_resolved=['badhost1', 'host1234', 'badhost2'],
-        whitelist_in_config=['host4567', 'foo', 'host1234', 'bar'],
-        expected_verdict='ACCEPT'
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['badhost1', 'host1234', 'badhost2'],
+            'config': dedent("""[hosts_for_groups]\n__all__ = {whitelist}\n
+                """.format(whitelist='\n         '.join(['host4567', 'foo', 'host1234', 'bar']))),
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': []
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Target IP resolved to multiple hosts in multiline whitelist is accepted',
     )
 
-
-def test_matching_falls_back_to_ip_match_if_resolving_failed():
-    _assert_for_verdict(
-        target_ip='1.2.3.4',
-        target_ip_resolved=[],
-        whitelist_in_config=['host4567', 'foo', 'host1234', '1.2.3.4'],
-        expected_verdict='ACCEPT'
+    yield pytest.param(
+        {
+            'target_ip_resolved': [],
+            'config': dedent("""[hosts_for_groups]\n__all__ = {whitelist}\n
+                """.format(whitelist="\n         ".join(['host4567', 'foo', 'host1234', '1.2.3.4']))),
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': '1.2.3.4',
+                'target_username': 'DONTCARE',
+                'gateway_groups': []
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Matching falls back to IP match if resolving failed'
     )
 
-
-def test_wildcards_can_be_used_in_host_lists_for_single_resolved_hostname():
-    _assert_for_verdict(
-        target_ip='DONTCARE',
-        target_ip_resolved=['host1234'],
-        whitelist_in_config=['h?st*'],
-        expected_verdict='ACCEPT'
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234'],
+            'config': '[hosts_for_groups]\n__all__ = h?st*',
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': []
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Wildcards can be used in host lists for single resolved hostname'
     )
 
-
-def test_wildcards_can_be_used_in_host_lists_for_multiple_resolved_hostname():
-    _assert_for_verdict(
-        target_ip='DONTCARE',
-        target_ip_resolved=['host1234', 'foobar'],
-        whitelist_in_config=['*bar'],
-        expected_verdict='ACCEPT'
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234', 'foobar'],
+            'config': '[hosts_for_groups]\n__all__ = *bar',
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': []
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Wildcards can be used in host lists for multiple resolved hostname'
     )
 
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234'],
+            'config': '[hosts_for_groups]\ntest_group = host1234, other_host, foo, bar',
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': ['fake_group', 'foo', 'bar', 'test_group']
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Session accepted if match found for gateway group'
+    )
 
-def _assert_for_verdict(target_ip, target_ip_resolved, whitelist_in_config, expected_verdict='ACCEPT'):
-    testconfig = dedent("""
-        [hosts_for_groups]
-        __all__ = {whitelist}
-    """.format(whitelist="\n         ".join(whitelist_in_config)))
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234'],
+            'config': '[groups_for_hosts]\nhost1234 = test_group',
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': ['fake_group', 'test_group']
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Groups for host specification works for single group'
+    )
 
-    with patch('safeguard.sessions.plugin.host_resolver.HostResolver.resolve_hosts_by_ip') as mock_resolver:
-        mock_resolver.return_value = target_ip_resolved
-        result = Plugin(configuration=testconfig).authorize(
-                    cookie={},
-                    session_cookie={},
-                    target_server=target_ip,
-                    target_username='test_user')
-        assert result['verdict'] == expected_verdict
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234'],
+            'config': '[groups_for_hosts]\nhost* = test_group',
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': ['fake_group', 'test_group']
+            },
+            'expected_verdict': 'ACCEPT'
+        },
+        id='Groups for hosts specification supports wildcards for hosts'
+    )
 
+    yield pytest.param(
+        {
+            'target_ip_resolved': ['host1234'],
+            'config': '[groups_for_hosts]\nhost1234 = test_group',
+            'params': {
+                'cookie': {},
+                'session_cookie': {},
+                'target_server': 'DONTCARE',
+                'target_username': 'DONTCARE',
+                'gateway_groups': ['unauthorized_group1', 'unauthorized_group2']
+            },
+            'expected_verdict': 'DENY'
+        },
+        id='Group not on whitelist for target host is denied'
+    )
 
-def test_session_accepted_if_match_found_for_gateway_group():
-    testconfig = dedent("""
-        [hosts_for_groups]
-        test_group = host1234, other_host, foo, bar
-    """)
-
-    with patch('safeguard.sessions.plugin.host_resolver.HostResolver.resolve_hosts_by_ip') as mock_resolver:
-        mock_resolver.return_value = ['host1234']
-        result = Plugin(configuration=testconfig).authorize(
-                    cookie={},
-                    session_cookie={},
-                    target_server='DONTCARE',
-                    gateway_groups=['fake_group', 'foo', 'bar', 'test_group'],
-                    target_username='test_user'
-                )
-        assert result['verdict'] == 'ACCEPT'
-
-
-def test_space_comma_and_newline_delimiters_all_work_in_whitelist():
-    testconfig = dedent("""
+    delimiter_test_config = dedent("""
         [hosts_for_groups]
         __all__ = host0, host1 host2
                   host3
     """)
 
-    with patch('safeguard.sessions.plugin.host_resolver.HostResolver.resolve_hosts_by_ip') as mock_resolver:
-        for i in range(4):
-            mock_resolver.return_value = ['host' + str(i)]
-            result = Plugin(configuration=testconfig).authorize(
-                        cookie={},
-                        session_cookie={},
-                        target_server='DONTCARE',
-                        target_username='test_user')
-            assert result['verdict'] == 'ACCEPT'
-
-
-def test_groups_for_host_specification_works_for_single_group():
-    testconfig = dedent("""
-        [groups_for_hosts]
-        host1234 = test_group
-    """)
-    with patch('safeguard.sessions.plugin.host_resolver.HostResolver.resolve_hosts_by_ip') as mock_resolver:
-        mock_resolver.return_value = ['host1234']
-        result = Plugin(configuration=testconfig).authorize(
-                    cookie={},
-                    session_cookie={},
-                    target_server='DONTCARE',
-                    gateway_groups=['fake_group', 'test_group'],
-                    target_username='test_user'
-                )
-        assert result['verdict'] == 'ACCEPT'
-
-
-def test_groups_for_host_specification_supports_wildcards_for_hosts():
-    testconfig = dedent("""
-        [groups_for_hosts]
-        host* = test_group
-    """)
-    with patch('safeguard.sessions.plugin.host_resolver.HostResolver.resolve_hosts_by_ip') as mock_resolver:
-        mock_resolver.return_value = ['host1234']
-        result = Plugin(configuration=testconfig).authorize(
-                    cookie={},
-                    session_cookie={},
-                    target_server='DONTCARE',
-                    gateway_groups=['fake_group', 'test_group'],
-                    target_username='test_user'
-                )
-        assert result['verdict'] == 'ACCEPT'
-
-
-def test_gateway_group_not_on_whitelist_for_target_host_is_denied():
-    testconfig = dedent("""
-        [groups_for_hosts]
-        host123 = test_group
-    """)
-    with patch('safeguard.sessions.plugin.host_resolver.HostResolver.resolve_hosts_by_ip') as mock_resolver:
-        mock_resolver.return_value = ['host1234']
-        result = Plugin(configuration=testconfig).authorize(
-                cookie={},
-                session_cookie={},
-                target_server='DONTCARE',
-                gateway_groups=['unathorized_group1', 'unauthorized_group2'],
-                target_username='test_user'
+    for i in range(4):
+        yield pytest.param(
+            {
+                'target_ip_resolved': ['host' + str(i)],
+                'config': delimiter_test_config,
+                'params': {
+                    'cookie': {},
+                    'session_cookie': {},
+                    'target_server': 'DONTCARE',
+                    'target_username': 'DONTCARE',
+                    'gateway_groups': []
+                },
+                'expected_verdict': 'ACCEPT'
+            },
+            id='Comma, space and newline delimiters all work in whitelist'
         )
-        assert result['verdict'] == 'DENY'
+
+
+@pytest.mark.parametrize('tc', provide_authorization_test_cases())
+def test_authorize_hook(tc):
+    def check_tc(target_ip_resolved, config, params, expected_verdict):
+        with patch('safeguard.sessions.plugin.host_resolver.HostResolver.resolve_hosts_by_ip') as mock_resolver:
+            mock_resolver.return_value = target_ip_resolved
+            assert Plugin(configuration=config).authorize(**deepcopy(params))['verdict'] == expected_verdict
+
+    check_tc(**tc)
