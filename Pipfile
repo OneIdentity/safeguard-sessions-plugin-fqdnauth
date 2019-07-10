@@ -3,4 +3,4 @@
 [dev-packages]
 
 [requires]
-python-version = "3.6"
+python_version = "3.6"
