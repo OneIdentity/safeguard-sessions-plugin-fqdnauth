@@ -28,14 +28,15 @@ class Plugin(AAPlugin):
     def do_authorize(self):
         target_hosts = self._resolve_ip(self.connection.target_server)
 
-        if self._hosts_for_groups_match(target_hosts, self.connection.gateway_groups)\
-                or self._groups_for_hosts_match(target_hosts, self.connection.gateway_groups):
+        if self._hosts_for_groups_match(target_hosts, self.connection.gateway_groups) or self._groups_for_hosts_match(
+            target_hosts, self.connection.gateway_groups
+        ):
             return AAResponse.accept()
         else:
             return AAResponse.deny()
 
     def _extract_mfa_password(self):
-        return ''
+        return ""
 
     @staticmethod
     def _resolve_ip(ip):
@@ -45,10 +46,10 @@ class Plugin(AAPlugin):
         return hosts
 
     def _hosts_for_groups_match(self, hosts, groups):
-        if not self.plugin_configuration.get_options('hosts_for_groups'):
+        if not self.plugin_configuration.get_options("hosts_for_groups"):
             return False
 
-        group_list = ['__all__'] + groups if groups is not None else ['__all__']
+        group_list = ["__all__"] + groups if groups is not None else ["__all__"]
 
         for group in group_list:
             if self._hosts_allowed_for_group(hosts, group):
@@ -56,14 +57,14 @@ class Plugin(AAPlugin):
         return False
 
     def _hosts_allowed_for_group(self, hosts, group):
-        whitelist_for_group = self.plugin_configuration.get('hosts_for_groups', group)
+        whitelist_for_group = self.plugin_configuration.get("hosts_for_groups", group)
         if whitelist_for_group is None:
             return False
         return self._hosts_have_match_in_list(hosts, self._split_entry(whitelist_for_group))
 
     @staticmethod
     def _split_entry(entry):
-        return re.split('[, \\n]', entry)
+        return re.split("[, \\n]", entry)
 
     @staticmethod
     def _hosts_have_match_in_list(hosts, pattern_list):
@@ -74,7 +75,7 @@ class Plugin(AAPlugin):
         return False
 
     def _groups_for_hosts_match(self, hosts, groups):
-        host_entries = self.plugin_configuration.get_options('groups_for_hosts')
+        host_entries = self.plugin_configuration.get_options("groups_for_hosts")
 
         if len(host_entries) == 0 or groups is None:
             return False
@@ -86,10 +87,10 @@ class Plugin(AAPlugin):
         return False
 
     def _get_groups_for_host(self, host):
-        host_entries = self.plugin_configuration.get_options('groups_for_hosts')
+        host_entries = self.plugin_configuration.get_options("groups_for_hosts")
         for host_entry in host_entries:
             if fnmatch(host, host_entry):
-                return self._split_entry(self.plugin_configuration.get('groups_for_hosts', host_entry))
+                return self._split_entry(self.plugin_configuration.get("groups_for_hosts", host_entry))
         return []
 
     @staticmethod
